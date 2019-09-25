@@ -1321,6 +1321,161 @@ class InstantiateFeatureVariationsTest(object):
         assert rec1.ConditionSet.ConditionTable[0].Format == 2
 
 
+class LimitTupleVariationAxisRangesTest:
+    def check_limit_single_var_axis_range(self, var, axisTag, axisRange, expected):
+        result = instancer.limitTupleVariationAxisRange(var, axisTag, axisRange)
+        print(result)
+
+        assert len(result) == len(expected)
+        for v1, v2 in zip(result, expected):
+            assert v1.coordinates == pytest.approx(v2.coordinates)
+            assert v1.axes.keys() == v2.axes.keys()
+            for k in v1.axes:
+                p, q = v1.axes[k], v2.axes[k]
+                assert p == pytest.approx(q)
+
+    @pytest.mark.parametrize(
+        "var, axisTag, newMax, expected",
+        [
+            (
+                TupleVariation({"wght": (0.0, 1.0, 1.0)}, [100, 100]),
+                "wdth",
+                0.5,
+                [TupleVariation({"wght": (0.0, 1.0, 1.0)}, [100, 100])],
+            ),
+            (
+                TupleVariation({"wght": (0.0, 1.0, 1.0)}, [100, 100]),
+                "wght",
+                0.5,
+                [TupleVariation({"wght": (0.0, 1.0, 1.0)}, [50, 50])],
+            ),
+            (
+                TupleVariation({"wght": (0.0, 1.0, 1.0)}, [100, 100]),
+                "wght",
+                0.8,
+                [TupleVariation({"wght": (0.0, 1.0, 1.0)}, [80, 80])],
+            ),
+            (
+                TupleVariation({"wght": (0.0, 1.0, 1.0)}, [100, 100]),
+                "wght",
+                1.0,
+                [TupleVariation({"wght": (0.0, 1.0, 1.0)}, [100, 100])],
+            ),
+            (TupleVariation({"wght": (0.0, 1.0, 1.0)}, [100, 100]), "wght", 0.0, []),
+            (TupleVariation({"wght": (0.5, 1.0, 1.0)}, [100, 100]), "wght", 0.4, []),
+            (
+                TupleVariation({"wght": (0.0, 0.5, 1.0)}, [100, 100]),
+                "wght",
+                0.5,
+                [TupleVariation({"wght": (0.0, 1.0, 1.0)}, [100, 100])],
+            ),
+            (
+                TupleVariation({"wght": (0.0, 0.5, 1.0)}, [100, 100]),
+                "wght",
+                0.4,
+                [TupleVariation({"wght": (0.0, 1.0, 1.0)}, [80, 80])],
+            ),
+            (
+                TupleVariation({"wght": (0.0, 0.5, 1.0)}, [100, 100]),
+                "wght",
+                0.6,
+                [TupleVariation({"wght": (0.0, 0.833334, 1.666667)}, [100, 100])],
+            ),
+            (
+                TupleVariation({"wght": (0.0, 0.2, 1.0)}, [100, 100]),
+                "wght",
+                0.4,
+                [
+                    TupleVariation({"wght": (0.0, 0.5, 1.99994)}, [100, 100]),
+                    TupleVariation({"wght": (0.5, 1.0, 1.0)}, [8.33333, 8.33333]),
+                ],
+            ),
+            (
+                TupleVariation({"wght": (0.0, 0.2, 1.0)}, [100, 100]),
+                "wght",
+                0.5,
+                [TupleVariation({"wght": (0.0, 0.4, 1.99994)}, [100, 100])],
+            ),
+        ],
+    )
+    def test_positive_var(self, var, axisTag, newMax, expected):
+        axisRange = instancer.NormalizedAxisRange(0, newMax)
+        self.check_limit_single_var_axis_range(var, axisTag, axisRange, expected)
+
+    @pytest.mark.parametrize(
+        "var, axisTag, newMin, expected",
+        [
+            (
+                TupleVariation({"wght": (-1.0, -1.0, 0.0)}, [100, 100]),
+                "wdth",
+                -0.5,
+                [TupleVariation({"wght": (-1.0, -1.0, 0.0)}, [100, 100])],
+            ),
+            (
+                TupleVariation({"wght": (-1.0, -1.0, 0.0)}, [100, 100]),
+                "wght",
+                -0.5,
+                [TupleVariation({"wght": (-1.0, -1.0, 0.0)}, [50, 50])],
+            ),
+            (
+                TupleVariation({"wght": (-1.0, -1.0, 0.0)}, [100, 100]),
+                "wght",
+                -0.8,
+                [TupleVariation({"wght": (-1.0, -1.0, 0.0)}, [80, 80])],
+            ),
+            (
+                TupleVariation({"wght": (-1.0, -1.0, 0.0)}, [100, 100]),
+                "wght",
+                -1.0,
+                [TupleVariation({"wght": (-1.0, -1.0, 0.0)}, [100, 100])],
+            ),
+            (TupleVariation({"wght": (-1.0, -1.0, 0.0)}, [100, 100]), "wght", 0.0, []),
+            (
+                TupleVariation({"wght": (-1.0, -1.0, -0.5)}, [100, 100]),
+                "wght",
+                -0.4,
+                [],
+            ),
+            (
+                TupleVariation({"wght": (-1.0, -0.5, 0.0)}, [100, 100]),
+                "wght",
+                -0.5,
+                [TupleVariation({"wght": (-1.0, -1.0, 0.0)}, [100, 100])],
+            ),
+            (
+                TupleVariation({"wght": (-1.0, -0.5, 0.0)}, [100, 100]),
+                "wght",
+                -0.4,
+                [TupleVariation({"wght": (-1.0, -1.0, 0.0)}, [80, 80])],
+            ),
+            (
+                TupleVariation({"wght": (-1.0, -0.5, 0.0)}, [100, 100]),
+                "wght",
+                -0.6,
+                [TupleVariation({"wght": (-1.666667, -0.833334, 0.0)}, [100, 100])],
+            ),
+            (
+                TupleVariation({"wght": (-1.0, -0.2, 0.0)}, [100, 100]),
+                "wght",
+                -0.4,
+                [
+                    TupleVariation({"wght": (-2.0, -0.5, -0.0)}, [100, 100]),
+                    TupleVariation({"wght": (-1.0, -1.0, -0.5)}, [8.33333, 8.33333]),
+                ],
+            ),
+            (
+                TupleVariation({"wght": (-1.0, -0.2, 0.0)}, [100, 100]),
+                "wght",
+                -0.5,
+                [TupleVariation({"wght": (-2.0, -0.4, 0.0)}, [100, 100])],
+            ),
+        ],
+    )
+    def test_negative_var(self, var, axisTag, newMin, expected):
+        axisRange = instancer.NormalizedAxisRange(newMin, 0)
+        self.check_limit_single_var_axis_range(var, axisTag, axisRange, expected)
+
+
 @pytest.mark.parametrize(
     "limits, expected",
     [
