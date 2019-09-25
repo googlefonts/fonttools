@@ -762,8 +762,21 @@ def instantiateAvar(varfont, location):
             del segments[axis]
 
 
-def instantiateFvar(varfont, location):
-    # 'location' dict must contain user-space (non-normalized) coordinates
+def isInstanceWithinAxisRanges(location, axisRanges):
+    for axisTag, coord in location.items():
+        if axisTag in axisRanges:
+            axisRange = axisRanges[axisTag]
+            if coord < axisRange.minimum or coord > axisRange.maximum:
+                return False
+    return True
+
+
+def instantiateFvar(varfont, axisLimits):
+    # 'axisLimits' dict must contain user-space (non-normalized) coordinates
+
+    location, axisRanges = splitAxisLocationAndRanges(
+        axisLimits, rangeType=AxisRange
+    )
 
     fvar = varfont["fvar"]
 
@@ -775,15 +788,25 @@ def instantiateFvar(varfont, location):
 
     log.info("Instantiating fvar table")
 
-    fvar.axes = [axis for axis in fvar.axes if axis.axisTag not in location]
+    axes = []
+    for axis in fvar.axes:
+        axisTag = axis.axisTag
+        if axisTag in location:
+            continue
+        if axisTag in axisRanges:
+            axis.minValue, axis.maxValue = axisRanges[axisTag]
+        axes.append(axis)
+    fvar.axes = axes
 
     # only keep NamedInstances whose coordinates == pinned axis location
     instances = []
     for instance in fvar.instances:
         if any(instance.coordinates[axis] != value for axis, value in location.items()):
             continue
-        for axis in location:
-            del instance.coordinates[axis]
+        for axisTag in location:
+            del instance.coordinates[axisTag]
+        if not isInstanceWithinAxisRanges(instance.coordinates, axisRanges):
+            continue
         instances.append(instance)
     fvar.instances = instances
 
@@ -1022,11 +1045,11 @@ def instantiateVariableFont(
     # if "avar" in varfont:
     #     instantiateAvar(varfont, normalizedLimits)
     #
-    # with pruningUnusedNames(varfont):
-    #     if "STAT" in varfont:
-    #         instantiateSTAT(varfont, axisLimits)
-    #
-    #     instantiateFvar(varfont, axisLimits)
+    with pruningUnusedNames(varfont):
+        # if "STAT" in varfont:
+        #     instantiateSTAT(varfont, axisLimits)
+
+        instantiateFvar(varfont, axisLimits)
 
     if "fvar" not in varfont:
         if "glyf" in varfont and overlap:
