@@ -747,7 +747,11 @@ def _instantiateFeatureVariations(table, fvarAxes, location):
         del table.FeatureVariations
 
 
-def instantiateAvar(varfont, location):
+def instantiateAvar(varfont, axisLimits):
+    location, axisRanges = splitAxisLocationAndRanges(
+        axisLimits, rangeType=NormalizedAxisRange
+    )
+
     segments = varfont["avar"].segments
 
     # drop table if we instantiate all the axes
@@ -760,6 +764,39 @@ def instantiateAvar(varfont, location):
     for axis in location:
         if axis in segments:
             del segments[axis]
+
+    newSegments = {}
+    for axisTag, mapping in segments.items():
+        if axisTag in axisRanges:
+            axisRange = axisRanges[axisTag]
+            newMapping = {}
+            for key, value in mapping.items():
+                if key < 0:
+                    if axisRange.minimum == 0:
+                        continue
+                    key /= abs(axisRange.minimum)
+                    if key < -1.0:
+                        continue
+                else:
+                    if axisRange.maximum == 0:
+                        continue
+                    key /= axisRange.maximum
+                    if key > 1.0:
+                        continue
+                if value < 0:
+                    value /= abs(piecewiseLinearMap(axisRange.minimum, mapping))
+                    if value < -1.0:
+                        continue
+                else:
+                    value /= piecewiseLinearMap(axisRange.maximum, mapping)
+                    if value > 1.0:
+                        continue
+                newMapping[key] = value
+            newMapping.update({-1.0: -1.0, 0.0: 0.0, 1.0: 1.0})
+            newSegments[axisTag] = newMapping
+        else:
+            newSegments[axisTag] = mapping
+    varfont["avar"].segments = newSegments
 
 
 def isInstanceWithinAxisRanges(location, axisRanges):
@@ -774,9 +811,7 @@ def isInstanceWithinAxisRanges(location, axisRanges):
 def instantiateFvar(varfont, axisLimits):
     # 'axisLimits' dict must contain user-space (non-normalized) coordinates
 
-    location, axisRanges = splitAxisLocationAndRanges(
-        axisLimits, rangeType=AxisRange
-    )
+    location, axisRanges = splitAxisLocationAndRanges(axisLimits, rangeType=AxisRange)
 
     fvar = varfont["fvar"]
 
@@ -1032,8 +1067,10 @@ def instantiateVariableFont(
     # if "MVAR" in varfont:
     #     instantiateMVAR(varfont, normalizedLimits)
     #
-    # if "HVAR" in varfont:
-    #     instantiateHVAR(varfont, normalizedLimits)
+    if "HVAR" in varfont:
+        # FIXME
+        del varfont["HVAR"]
+        # instantiateHVAR(varfont, normalizedLimits)
     #
     # if "VVAR" in varfont:
     #     instantiateVVAR(varfont, normalizedLimits)
@@ -1042,8 +1079,8 @@ def instantiateVariableFont(
 
     # instantiateFeatureVariations(varfont, normalizedLimits)
     #
-    # if "avar" in varfont:
-    #     instantiateAvar(varfont, normalizedLimits)
+    if "avar" in varfont:
+        instantiateAvar(varfont, normalizedLimits)
     #
     with pruningUnusedNames(varfont):
         # if "STAT" in varfont:
