@@ -424,13 +424,13 @@ def _remapVarIdxMap(table, attrName, varIndexMapping, glyphOrder):
 
 
 # TODO(anthrotype) Add support for HVAR/VVAR in CFF2
-def _instantiateVHVAR(varfont, location, tableFields):
+def _instantiateVHVAR(varfont, axisLimits, tableFields):
     tableTag = tableFields.tableTag
     fvarAxes = varfont["fvar"].axes
     # Deltas from gvar table have already been applied to the hmtx/vmtx. For full
     # instances (i.e. all axes pinned), we can simply drop HVAR/VVAR and return
     if set(
-        axisTag for axisTag, value in location if not isinstance(value, tuple)
+        axisTag for axisTag, value in axisLimits.items() if not isinstance(value, tuple)
     ).issuperset(axis.axisTag for axis in fvarAxes):
         log.info("Dropping %s table", tableTag)
         del varfont[tableTag]
@@ -440,7 +440,7 @@ def _instantiateVHVAR(varfont, location, tableFields):
     vhvar = varfont[tableTag].table
     varStore = vhvar.VarStore
     # since deltas were already applied, the return value here is ignored
-    instantiateItemVariationStore(varStore, fvarAxes, location)
+    instantiateItemVariationStore(varStore, fvarAxes, axisLimits)
 
     if varStore.VarRegionList.Region:
         # Only re-optimize VarStore if the HVAR/VVAR already uses indirect AdvWidthMap
@@ -494,31 +494,40 @@ class _TupleVarStoreAdapter(object):
             itemCounts.append(varData.ItemCount)
         return cls(regions, axisOrder, tupleVarData, itemCounts)
 
-    def dropAxes(self, axes):
-        prunedRegions = (
-            frozenset(
-                (axisTag, support)
-                for axisTag, support in region.items()
-                if axisTag not in axes
-            )
-            for region in self.regions
-        )
+    def rebuildRegions(self):
         # dedup regions while keeping original order
-        uniqueRegions = collections.OrderedDict.fromkeys(prunedRegions)
-        self.regions = [dict(items) for items in uniqueRegions if items]
-        self.axisOrder = [axisTag for axisTag in self.axisOrder if axisTag not in axes]
+        uniqueRegions = collections.OrderedDict.fromkeys(
+            (
+                frozenset(var.axes.items())
+                for variations in self.tupleVarData
+                for var in variations
+            )
+        )
+        newRegions = []
+        for region in self.regions:
+            regionAxes = frozenset(region.items())
+            if regionAxes in uniqueRegions:
+                newRegions.append(region)
+                del uniqueRegions[regionAxes]
+        if uniqueRegions:
+            newRegions.extend(dict(region) for region in uniqueRegions)
+        self.regions = newRegions
 
-    def instantiate(self, location):
+        axes = set()
+        for region in self.regions:
+            axes.update(region)
+        self.axisOrder = [axisTag for axisTag in self.axisOrder if axisTag in axes]
+
+    def instantiate(self, axisLimits):
         defaultDeltaArray = []
         for variations, itemCount in zip(self.tupleVarData, self.itemCounts):
-            defaultDeltas = instantiateTupleVariationStore(variations, location)
+            defaultDeltas = instantiateTupleVariationStore(variations, axisLimits)
             if not defaultDeltas:
                 defaultDeltas = [0] * itemCount
             defaultDeltaArray.append(defaultDeltas)
 
-        # remove pinned axes from all the regions
-        # TODO: must rebuild regions whose axes were limited
-        self.dropAxes(location)
+        # rebuild regions whose axes were dropped or limited
+        self.rebuildRegions()
 
         return defaultDeltaArray
 
@@ -546,7 +555,7 @@ class _TupleVarStoreAdapter(object):
         return itemVarStore
 
 
-def instantiateItemVariationStore(itemVarStore, fvarAxes, location):
+def instantiateItemVariationStore(itemVarStore, fvarAxes, axisLimits):
     """ Compute deltas at partial location, and update varStore in-place.
 
     Remove regions in which all axes were instanced, and scale the deltas of
@@ -567,7 +576,7 @@ def instantiateItemVariationStore(itemVarStore, fvarAxes, location):
             keyed by VariationIndex compound values: i.e. (outer << 16) + inner.
     """
     tupleVarStore = _TupleVarStoreAdapter.fromItemVarStore(itemVarStore, fvarAxes)
-    defaultDeltaArray = tupleVarStore.instantiate(location)
+    defaultDeltaArray = tupleVarStore.instantiate(axisLimits)
     newItemVarStore = tupleVarStore.asItemVarStore()
 
     itemVarStore.VarRegionList = newItemVarStore.VarRegionList
@@ -1064,24 +1073,22 @@ def instantiateVariableFont(
     if "cvar" in varfont:
         instantiateCvar(varfont, normalizedLimits)
 
-    # if "MVAR" in varfont:
-    #     instantiateMVAR(varfont, normalizedLimits)
-    #
+    if "MVAR" in varfont:
+        instantiateMVAR(varfont, normalizedLimits)
+
     if "HVAR" in varfont:
-        # FIXME
-        del varfont["HVAR"]
-        # instantiateHVAR(varfont, normalizedLimits)
-    #
-    # if "VVAR" in varfont:
-    #     instantiateVVAR(varfont, normalizedLimits)
-    #
-    # instantiateOTL(varfont, normalizedLimits)
+        instantiateHVAR(varfont, normalizedLimits)
+
+    if "VVAR" in varfont:
+        instantiateVVAR(varfont, normalizedLimits)
+
+    instantiateOTL(varfont, normalizedLimits)
 
     # instantiateFeatureVariations(varfont, normalizedLimits)
-    #
+
     if "avar" in varfont:
         instantiateAvar(varfont, normalizedLimits)
-    #
+
     with pruningUnusedNames(varfont):
         # if "STAT" in varfont:
         #     instantiateSTAT(varfont, axisLimits)
