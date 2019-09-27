@@ -499,7 +499,8 @@ class _TupleVarStoreAdapter(object):
         return cls(regions, axisOrder, tupleVarData, itemCounts)
 
     def rebuildRegions(self):
-        # dedup regions while keeping original order
+        # Collect the set of all unique region axes from the current TupleVariations.
+        # We use an OrderedDict to de-duplicate regions while keeping the order.
         uniqueRegions = collections.OrderedDict.fromkeys(
             (
                 frozenset(var.axes.items())
@@ -507,6 +508,8 @@ class _TupleVarStoreAdapter(object):
                 for var in variations
             )
         )
+        # Maintain the original order for the regions that pre-existed, appending
+        # the new regions at the end of the region list.
         newRegions = []
         for region in self.regions:
             regionAxes = frozenset(region.items())
