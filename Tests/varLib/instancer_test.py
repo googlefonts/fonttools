@@ -493,32 +493,41 @@ class TupleVarStoreAdapterTest(object):
             [TupleVariation({"wdth": (-1.0, -1.0, 0)}, [-12, 8])],
         ]
 
-    def test_dropAxes(self):
+    def test_rebuildRegions(self):
         regions = [
             {"wght": (-1.0, -1.0, 0)},
             {"wght": (0.0, 1.0, 1.0)},
             {"wdth": (-1.0, -1.0, 0)},
-            {"opsz": (0.0, 1.0, 1.0)},
             {"wght": (-1.0, -1.0, 0), "wdth": (-1.0, -1.0, 0)},
-            {"wght": (0, 0.5, 1.0), "wdth": (-1.0, -1.0, 0)},
-            {"wght": (0.5, 1.0, 1.0), "wdth": (-1.0, -1.0, 0)},
+            {"wght": (0, 1.0, 1.0), "wdth": (-1.0, -1.0, 0)},
         ]
-        axisOrder = ["wght", "wdth", "opsz"]
-        adapter = instancer._TupleVarStoreAdapter(regions, axisOrder, [], itemCounts=[])
+        axisOrder = ["wght", "wdth"]
+        variations = []
+        for region in regions:
+            variations.append(TupleVariation(region, [100]))
+        tupleVarData = [variations[:3], variations[3:]]
+        adapter = instancer._TupleVarStoreAdapter(
+            regions, axisOrder, tupleVarData, itemCounts=[1, 1]
+        )
 
-        adapter.dropAxes({"wdth"})
+        adapter.rebuildRegions()
+
+        assert adapter.regions == regions
+        assert adapter.axisOrder == axisOrder
+
+        del tupleVarData[0][2]
+        tupleVarData[1][0].axes = {"wght": (-1.0, -0.5, 0)}
+        tupleVarData[1][1].axes = {"wght": (0, 0.5, 1.0)}
+
+        adapter.rebuildRegions()
 
         assert adapter.regions == [
             {"wght": (-1.0, -1.0, 0)},
             {"wght": (0.0, 1.0, 1.0)},
-            {"opsz": (0.0, 1.0, 1.0)},
-            {"wght": (0.0, 0.5, 1.0)},
-            {"wght": (0.5, 1.0, 1.0)},
+            {"wght": (-1.0, -0.5, 0)},
+            {"wght": (0, 0.5, 1.0)},
         ]
-
-        adapter.dropAxes({"wght", "opsz"})
-
-        assert adapter.regions == []
+        assert adapter.axisOrder == ["wght"]
 
     def test_roundtrip(self, fvarAxes):
         regions = [
