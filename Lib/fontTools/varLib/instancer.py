@@ -216,17 +216,16 @@ def _negate(*values):
 
 
 def limitTupleVariationAxisRange(var, axisTag, axisRange):
-    assert isinstance(axisRange, NormalizedAxisRange)
+    if not isinstance(axisRange, NormalizedAxisRange):
+        axisRange = NormalizedAxisRange(*axisRange)
 
-    if axisTag not in var.axes:
-        return [var]
-
-    lower, peak, upper = var.axes[axisTag]
+    # skip when current axis is missing (i.e. doesn't participate), or when the
+    # 'tent' isn't fully on either the negative or positive side
+    lower, peak, upper = var.axes.get(axisTag, (-1, 0, 1))
     if peak == 0 or lower > peak or peak > upper or (lower < 0 and upper > 0):
         return [var]
 
     negative = lower < 0
-
     if negative:
         if axisRange.minimum == -1.0:
             return [var]
@@ -240,13 +239,13 @@ def limitTupleVariationAxisRange(var, axisTag, axisRange):
 
     limit = axisRange.minimum if negative else axisRange.maximum
 
-    # If TupleVariation is in the negative quadrant, we use absolute values
-    # and swap lower and upper bounds to simplify the procedure; we'll swap them
-    # again and add the minus sign just before updating the TupleVariation axes.
-    absLimit = abs(limit)
-    newLower = abs(lower) / absLimit
-    newPeak = abs(peak) / absLimit
-    newUpper = abs(upper) / absLimit
+    # Rebase axis bounds onto the new limit, which then becomes the new -1.0 or +1.0.
+    # The results are always positive, because both dividend and divisor are either
+    # all positive or all negative.
+    newLower = lower / limit
+    newPeak = peak / limit
+    newUpper = upper / limit
+    # for negative TupleVariation, swap lower and upper to simplify procedure
     if negative:
         newLower, newUpper = newUpper, newLower
 
