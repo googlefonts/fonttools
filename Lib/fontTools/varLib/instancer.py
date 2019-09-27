@@ -249,8 +249,13 @@ def limitTupleVariationAxisRange(var, axisTag, axisRange):
     if negative:
         newLower, newUpper = newUpper, newLower
 
+    # special case when innermost bound == peak == limit
+    if newLower == newPeak == 1.0:
+        var.axes[axisTag] = (-1.0, -1.0, -1.0) if negative else (1.0, 1.0, 1.0)
+        return [var]
+
     # case 1: the whole deltaset falls outside the new limit; we can drop it
-    if newLower >= 1.0:
+    elif newLower >= 1.0:
         return []
 
     # case 2: only the peak and outermost bound fall outside the new limit;
