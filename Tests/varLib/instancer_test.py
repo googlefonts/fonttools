@@ -1517,9 +1517,9 @@ def test_normalizeAxisLimits_tuple(varfont):
 def test_normalizeAxisLimits_no_avar(varfont):
     del varfont["avar"]
 
-    normalized = instancer.normalizeAxisLimits(varfont, {"wght": (500, 600)})
+    normalized = instancer.normalizeAxisLimits(varfont, {"wght": (400, 500)})
 
-    assert normalized["wght"] == pytest.approx((0.2, 0.4), 1e-4)
+    assert normalized["wght"] == pytest.approx((0, 0.2), 1e-4)
 
 
 def test_normalizeAxisLimits_missing_from_fvar(varfont):
