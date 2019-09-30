@@ -520,11 +520,6 @@ class _TupleVarStoreAdapter(object):
             newRegions.extend(dict(region) for region in uniqueRegions)
         self.regions = newRegions
 
-        axes = set()
-        for region in self.regions:
-            axes.update(region)
-        self.axisOrder = [axisTag for axisTag in self.axisOrder if axisTag in axes]
-
     def instantiate(self, axisLimits):
         defaultDeltaArray = []
         for variations, itemCount in zip(self.tupleVarData, self.itemCounts):
@@ -535,6 +530,15 @@ class _TupleVarStoreAdapter(object):
 
         # rebuild regions whose axes were dropped or limited
         self.rebuildRegions()
+
+        pinnedAxes = {
+            axisTag
+            for axisTag, value in axisLimits.items()
+            if not isinstance(value, tuple)
+        }
+        self.axisOrder = [
+            axisTag for axisTag in self.axisOrder if axisTag not in pinnedAxes
+        ]
 
         return defaultDeltaArray
 
