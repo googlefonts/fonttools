@@ -661,7 +661,7 @@ def instantiateOTL(varfont, location):
             del varfont["GDEF"]
 
 
-def instantiateFeatureVariations(varfont, location):
+def instantiateFeatureVariations(varfont, axisLimits):
     for tableTag in ("GPOS", "GSUB"):
         if tableTag not in varfont or not hasattr(
             varfont[tableTag].table, "FeatureVariations"
@@ -669,7 +669,7 @@ def instantiateFeatureVariations(varfont, location):
             continue
         log.info("Instantiating FeatureVariations of %s table", tableTag)
         _instantiateFeatureVariations(
-            varfont[tableTag].table, varfont["fvar"].axes, location
+            varfont[tableTag].table, varfont["fvar"].axes, axisLimits
         )
         # remove unreferenced lookups
         varfont[tableTag].prune_lookups()
@@ -697,10 +697,48 @@ def _featureVariationRecordIsUnique(rec, seen):
         return True
 
 
+def _limitFeatureVariationConditionRange(condition, axisRange):
+    minValue = condition.FilterRangeMinValue
+    maxValue = condition.FilterRangeMaxValue
+
+    if (
+        minValue > maxValue
+        or minValue > axisRange.maximum
+        or maxValue < axisRange.minimum
+    ):
+        # condition invalid or out of range
+        return
+
+    values = [minValue, maxValue]
+    for i, value in enumerate(values):
+        if value < 0:
+            if axisRange.minimum == 0:
+                newValue = 0
+            else:
+                newValue = value / abs(axisRange.minimum)
+                if newValue <= -1.0:
+                    newValue = -1.0
+        elif value > 0:
+            if axisRange.maximum == 0:
+                newValue = 0
+            else:
+                newValue = value / axisRange.maximum
+                if newValue >= 1.0:
+                    newValue = 1.0
+        else:
+            newValue = 0
+        values[i] = newValue
+
+    # TODO(anthrotype): Is (0,0) condition supposed to be applied ever? Ask Behdad
+    # if not any(values):
+    #     return
+
+    return AxisRange(*values)
+
+
 def _instantiateFeatureVariationRecord(
-    record, recIdx, location, fvarAxes, axisIndexMap
+    record, recIdx, location, axisRanges, fvarAxes, axisIndexMap
 ):
-    shouldKeep = False
     applies = True
     newConditions = []
     for i, condition in enumerate(record.ConditionSet.ConditionTable):
@@ -714,6 +752,20 @@ def _instantiateFeatureVariationRecord(
                 if not (minValue <= v <= maxValue):
                     # condition not met so remove entire record
                     applies = False
+                    newConditions = None
+                    break
+            elif axisTag in axisRanges:
+                applies = False
+                axisRange = axisRanges[axisTag]
+                newRange = _limitFeatureVariationConditionRange(condition, axisRange)
+                if newRange:
+                    # keep condition with updated limits and remapped axis index
+                    condition.AxisIndex = axisIndexMap[axisTag]
+                    condition.FilterRangeMinValue = newRange.minimum
+                    condition.FilterRangeMaxValue = newRange.maximum
+                    newConditions.append(condition)
+                else:
+                    # condition out of range, remove entire record
                     newConditions = None
                     break
             else:
@@ -732,11 +784,16 @@ def _instantiateFeatureVariationRecord(
     if newConditions:
         record.ConditionSet.ConditionTable = newConditions
         shouldKeep = True
+    else:
+        shouldKeep = False
 
     return applies, shouldKeep
 
 
-def _instantiateFeatureVariations(table, fvarAxes, location):
+def _instantiateFeatureVariations(table, fvarAxes, axisLimits):
+    location, axisRanges = splitAxisLocationAndRanges(
+        axisLimits, rangeType=NormalizedAxisRange
+    )
     pinnedAxes = set(location.keys())
     axisOrder = [axis.axisTag for axis in fvarAxes if axis.axisTag not in pinnedAxes]
     axisIndexMap = {axisTag: axisOrder.index(axisTag) for axisTag in axisOrder}
@@ -747,7 +804,7 @@ def _instantiateFeatureVariations(table, fvarAxes, location):
 
     for i, record in enumerate(table.FeatureVariations.FeatureVariationRecord):
         applies, shouldKeep = _instantiateFeatureVariationRecord(
-            record, i, location, fvarAxes, axisIndexMap
+            record, i, location, axisRanges, fvarAxes, axisIndexMap
         )
         if shouldKeep:
             if _featureVariationRecordIsUnique(record, uniqueRecords):
@@ -1095,7 +1152,7 @@ def instantiateVariableFont(
 
     instantiateOTL(varfont, normalizedLimits)
 
-    # instantiateFeatureVariations(varfont, normalizedLimits)
+    instantiateFeatureVariations(varfont, normalizedLimits)
 
     if "avar" in varfont:
         instantiateAvar(varfont, normalizedLimits)
