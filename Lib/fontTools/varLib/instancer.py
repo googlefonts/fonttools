@@ -737,7 +737,7 @@ def _limitFeatureVariationConditionRange(condition, axisRange):
 
 
 def _instantiateFeatureVariationRecord(
-    record, recIdx, location, axisRanges, fvarAxes, axisIndexMap
+    record, recIdx, location, fvarAxes, axisIndexMap
 ):
     applies = True
     newConditions = []
@@ -752,20 +752,6 @@ def _instantiateFeatureVariationRecord(
                 if not (minValue <= v <= maxValue):
                     # condition not met so remove entire record
                     applies = False
-                    newConditions = None
-                    break
-            elif axisTag in axisRanges:
-                applies = False
-                axisRange = axisRanges[axisTag]
-                newRange = _limitFeatureVariationConditionRange(condition, axisRange)
-                if newRange:
-                    # keep condition with updated limits and remapped axis index
-                    condition.AxisIndex = axisIndexMap[axisTag]
-                    condition.FilterRangeMinValue = newRange.minimum
-                    condition.FilterRangeMaxValue = newRange.maximum
-                    newConditions.append(condition)
-                else:
-                    # condition out of range, remove entire record
                     newConditions = None
                     break
             else:
@@ -790,6 +776,38 @@ def _instantiateFeatureVariationRecord(
     return applies, shouldKeep
 
 
+def _limitFeatureVariationRecord(record, axisRanges, fvarAxes):
+    newConditions = []
+    for i, condition in enumerate(record.ConditionSet.ConditionTable):
+        if condition.Format == 1:
+            axisIdx = condition.AxisIndex
+            axisTag = fvarAxes[axisIdx].axisTag
+            if axisTag in axisRanges:
+                axisRange = axisRanges[axisTag]
+                newRange = _limitFeatureVariationConditionRange(condition, axisRange)
+                if newRange:
+                    # keep condition with updated limits and remapped axis index
+                    condition.FilterRangeMinValue = newRange.minimum
+                    condition.FilterRangeMaxValue = newRange.maximum
+                    newConditions.append(condition)
+                else:
+                    # condition out of range, remove entire record
+                    newConditions = None
+                    break
+            else:
+                newConditions.append(condition)
+        else:
+            newConditions.append(condition)
+
+    if newConditions:
+        record.ConditionSet.ConditionTable = newConditions
+        shouldKeep = True
+    else:
+        shouldKeep = False
+
+    return shouldKeep
+
+
 def _instantiateFeatureVariations(table, fvarAxes, axisLimits):
     location, axisRanges = splitAxisLocationAndRanges(
         axisLimits, rangeType=NormalizedAxisRange
@@ -804,11 +822,13 @@ def _instantiateFeatureVariations(table, fvarAxes, axisLimits):
 
     for i, record in enumerate(table.FeatureVariations.FeatureVariationRecord):
         applies, shouldKeep = _instantiateFeatureVariationRecord(
-            record, i, location, axisRanges, fvarAxes, axisIndexMap
+            record, i, location, fvarAxes, axisIndexMap
         )
         if shouldKeep:
-            if _featureVariationRecordIsUnique(record, uniqueRecords):
-                newRecords.append(record)
+            shouldKeep = _limitFeatureVariationRecord(record, axisRanges, fvarAxes)
+
+        if shouldKeep and _featureVariationRecordIsUnique(record, uniqueRecords):
+            newRecords.append(record)
 
         if applies and not featureVariationApplied:
             assert record.FeatureTableSubstitution.Version == 0x00010000
