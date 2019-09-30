@@ -1496,6 +1496,39 @@ class LimitTupleVariationAxisRangesTest:
 
 
 @pytest.mark.parametrize(
+    "oldRange, newRange, expected",
+    [
+        ((1.0, -1.0), (-1.0, 1.0), None),  # invalid oldRange min > max
+        ((0.6, 1.0), (0, 0.5), None),
+        ((-1.0, -0.6), (-0.5, 0), None),
+        ((0.4, 1.0), (0, 0.5), (0.8, 1.0)),
+        ((-1.0, -0.4), (-0.5, 0), (-1.0, -0.8)),
+        ((0.4, 1.0), (0, 0.4), (1.0, 1.0)),
+        ((-1.0, -0.4), (-0.4, 0), (-1.0, -1.0)),
+        ((-0.5, 0.5), (-0.4, 0.4), (-1.0, 1.0)),
+        (
+            (0, 1.0),
+            (-1.0, 0),
+            (0, 0),  # or None?
+        ),
+        (
+            (-1.0, 0),
+            (0, 1.0),
+            (0, 0),  # or None?
+        ),
+    ],
+)
+def test_limitFeatureVariationConditionRange(oldRange, newRange, expected):
+    condition = featureVars.buildConditionTable(0, *oldRange)
+
+    result = instancer._limitFeatureVariationConditionRange(
+        condition, instancer.NormalizedAxisRange(*newRange)
+    )
+
+    assert result == expected
+
+
+@pytest.mark.parametrize(
     "limits, expected",
     [
         (["wght=400", "wdth=100"], {"wght": 400, "wdth": 100}),
