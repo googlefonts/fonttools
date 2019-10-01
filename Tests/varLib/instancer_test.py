@@ -931,6 +931,213 @@ class InstantiateAvarTest(object):
 
         assert "avar" not in varfont
 
+    @pytest.fixture
+    def varfont(self):
+        # the following values from NotoSans-VF.ttf
+        fvarAxes = ("wght", (100, 400, 900)), ("wdth", (62.5, 100, 100))
+        avarSegments = {
+            "wght": {
+                -1.0: -1.0,
+                -0.6667: -0.7969,
+                -0.3333: -0.5,
+                0: 0,
+                0.2: 0.18,
+                0.4: 0.38,
+                0.6: 0.61,
+                0.8: 0.79,
+                1.0: 1.0,
+            },
+            "wdth": {-1.0: -1.0, -0.6667: -0.7, -0.3333: -0.36664, 0: 0, 1.0: 1.0},
+        }
+        varfont = ttLib.TTFont()
+        varfont["name"] = ttLib.newTable("name")
+        varLib._add_fvar(varfont, _makeDSAxesDict(fvarAxes), instances=())
+        avar = varfont["avar"] = ttLib.newTable("avar")
+        avar.segments = avarSegments
+        return varfont
+
+    @pytest.mark.parametrize(
+        "axisLimits, expectedSegments",
+        [
+            pytest.param(
+                {"wght": (100, 900)},
+                {
+                    "wght": {
+                        -1.0: -1.0,
+                        -0.6667: -0.7969,
+                        -0.3333: -0.5,
+                        0: 0,
+                        0.2: 0.18,
+                        0.4: 0.38,
+                        0.6: 0.61,
+                        0.8: 0.79,
+                        1.0: 1.0,
+                    },
+                    "wdth": {
+                        -1.0: -1.0,
+                        -0.6667: -0.7,
+                        -0.3333: -0.36664,
+                        0: 0,
+                        1.0: 1.0,
+                    },
+                },
+                id="wght=100:900",
+            ),
+            pytest.param(
+                {"wght": (400, 900)},
+                {
+                    "wght": {
+                        -1.0: -1.0,
+                        0: 0,
+                        0.2: 0.18,
+                        0.4: 0.38,
+                        0.6: 0.61,
+                        0.8: 0.79,
+                        1.0: 1.0,
+                    },
+                    "wdth": {
+                        -1.0: -1.0,
+                        -0.6667: -0.7,
+                        -0.3333: -0.36664,
+                        0: 0,
+                        1.0: 1.0,
+                    },
+                },
+                id="wght=400:900",
+            ),
+            pytest.param(
+                {"wght": (100, 400)},
+                {
+                    "wght": {
+                        -1.0: -1.0,
+                        -0.6667: -0.7969,
+                        -0.3333: -0.5,
+                        0: 0,
+                        1.0: 1.0,
+                    },
+                    "wdth": {
+                        -1.0: -1.0,
+                        -0.6667: -0.7,
+                        -0.3333: -0.36664,
+                        0: 0,
+                        1.0: 1.0,
+                    },
+                },
+                id="wght=100:400",
+            ),
+            pytest.param(
+                {"wdth": (62.5, 100)},
+                {
+                    "wght": {
+                        -1.0: -1.0,
+                        -0.6667: -0.7969,
+                        -0.3333: -0.5,
+                        0: 0,
+                        0.2: 0.18,
+                        0.4: 0.38,
+                        0.6: 0.61,
+                        0.8: 0.79,
+                        1.0: 1.0,
+                    },
+                    "wdth": {
+                        -1.0: -1.0,
+                        -0.6667: -0.7,
+                        -0.3333: -0.36664,
+                        0: 0,
+                        1.0: 1.0,
+                    },
+                },
+                id="wdth=62.5:100",
+            ),
+            pytest.param(
+                {"wdth": (70, 100)},
+                {
+                    "wght": {
+                        -1.0: -1.0,
+                        -0.6667: -0.7969,
+                        -0.3333: -0.5,
+                        0: 0,
+                        0.2: 0.18,
+                        0.4: 0.38,
+                        0.6: 0.61,
+                        0.8: 0.79,
+                        1.0: 1.0,
+                    },
+                    "wdth": {
+                        -1.0: -1.0,
+                        -0.813042: -0.835332,
+                        -0.406460: -0.437523,
+                        0: 0,
+                        1.0: 1.0,
+                    },
+                },
+                id="wdth=70:100",
+            ),
+            pytest.param(
+                {"wdth": (75, 100)},
+                {
+                    "wght": {
+                        -1.0: -1.0,
+                        -0.6667: -0.7969,
+                        -0.3333: -0.5,
+                        0: 0,
+                        0.2: 0.18,
+                        0.4: 0.38,
+                        0.6: 0.61,
+                        0.8: 0.79,
+                        1.0: 1.0,
+                    },
+                    "wdth": {
+                        -1.0: -1.0,
+                        -0.952495: -0.958997,
+                        -0.476176: -0.502295,
+                        0: 0,
+                        1.0: 1.0,
+                    },
+                },
+                id="wdth=75:100",
+            ),
+            pytest.param(
+                {"wdth": (77, 100)},
+                {
+                    "wght": {
+                        -1.0: -1.0,
+                        -0.6667: -0.7969,
+                        -0.3333: -0.5,
+                        0: 0,
+                        0.2: 0.18,
+                        0.4: 0.38,
+                        0.6: 0.61,
+                        0.8: 0.79,
+                        1.0: 1.0,
+                    },
+                    "wdth": {
+                        -1.0: -1.0,
+                        -0.515412: -0.5392,
+                        0: 0,
+                        1.0: 1.0,
+                    },
+                },
+                id="wdth=77:100",
+            ),
+        ],
+    )
+    def test_limit_axes(self, varfont, axisLimits, expectedSegments):
+        normalizedLimits = instancer.normalizeAxisLimits(varfont, axisLimits)
+
+        instancer.instantiateAvar(varfont, normalizedLimits)
+
+        print(varfont["avar"].segments)
+        for axisTag, segment in varfont["avar"].segments.items():
+            assert axisTag in expectedSegments
+            expectedSegment = expectedSegments[axisTag]
+            assert len(segment) == len(expectedSegment)
+            for (key, value), (expectedKey, expectedValue) in zip(
+                sorted(segment.items()), sorted(expectedSegment.items())
+            ):
+                assert key == pytest.approx(expectedKey)
+                assert value == pytest.approx(expectedValue)
+
 
 class InstantiateFvarTest(object):
     @pytest.mark.parametrize(
@@ -1506,16 +1713,8 @@ class LimitTupleVariationAxisRangesTest:
         ((0.4, 1.0), (0, 0.4), (1.0, 1.0)),
         ((-1.0, -0.4), (-0.4, 0), (-1.0, -1.0)),
         ((-0.5, 0.5), (-0.4, 0.4), (-1.0, 1.0)),
-        (
-            (0, 1.0),
-            (-1.0, 0),
-            (0, 0),  # or None?
-        ),
-        (
-            (-1.0, 0),
-            (0, 1.0),
-            (0, 0),  # or None?
-        ),
+        ((0, 1.0), (-1.0, 0), (0, 0)),  # or None?
+        ((-1.0, 0), (0, 1.0), (0, 0)),  # or None?
     ],
 )
 def test_limitFeatureVariationConditionRange(oldRange, newRange, expected):
