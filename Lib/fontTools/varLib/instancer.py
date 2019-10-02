@@ -111,7 +111,7 @@ class NormalizedAxisRange(AxisRange):
         if self.minimum > 0:
             raise ValueError(f"Expected axis range minimum <= 0; got {self.minimum}")
         if self.maximum < 0:
-            raise ValueError(f"Expected axis range maximum >= 0; got {self.minimum}")
+            raise ValueError(f"Expected axis range maximum >= 0; got {self.maximum}")
         return self
 
 
@@ -845,49 +845,50 @@ def _instantiateFeatureVariations(table, fvarAxes, axisLimits):
 
 
 def instantiateAvar(varfont, axisLimits):
-    location, axisRanges = splitAxisLocationAndRanges(
-        axisLimits, rangeType=NormalizedAxisRange
-    )
+    location, axisRanges = splitAxisLocationAndRanges(axisLimits)
 
     segments = varfont["avar"].segments
 
     # drop table if we instantiate all the axes
-    if set(location).issuperset(segments):
+    pinnedAxes = set(location.keys())
+    if pinnedAxes.issuperset(segments):
         log.info("Dropping avar table")
         del varfont["avar"]
         return
 
     log.info("Instantiating avar table")
-    for axis in location:
+    for axis in pinnedAxes:
         if axis in segments:
             del segments[axis]
 
+    normalizedRanges = normalizeAxisLimits(varfont, axisRanges, usingAvar=False)
     newSegments = {}
     for axisTag, mapping in segments.items():
-        if axisTag in axisRanges:
-            axisRange = axisRanges[axisTag]
+        if axisTag in normalizedRanges:
+            axisRange = normalizedRanges[axisTag]
+            mappedMin = piecewiseLinearMap(axisRange.minimum, mapping)
+            mappedMax = piecewiseLinearMap(axisRange.maximum, mapping)
             newMapping = {}
             for key, value in mapping.items():
+                # XXX https://github.com/fonttools/fonttools/issues/737
+                key = floatToFixedToFloat(key, 14)
+                value = floatToFixedToFloat(value, 14)
                 if key < 0:
-                    if axisRange.minimum == 0:
+                    if axisRange.minimum == 0 or key < axisRange.minimum:
                         continue
                     key /= abs(axisRange.minimum)
-                    if key < -1.0:
-                        continue
                 else:
-                    if axisRange.maximum == 0:
+                    if axisRange.maximum == 0 or key > axisRange.maximum:
                         continue
                     key /= axisRange.maximum
-                    if key > 1.0:
-                        continue
                 if value < 0:
-                    value /= abs(piecewiseLinearMap(axisRange.minimum, mapping))
-                    if value < -1.0:
+                    if mappedMin == 0 or value < mappedMin:
                         continue
+                    value /= abs(mappedMin)
                 else:
-                    value /= piecewiseLinearMap(axisRange.maximum, mapping)
-                    if value > 1.0:
+                    if mappedMax == 0 or value > mappedMax:
                         continue
+                    value /= mappedMax
                 newMapping[key] = value
             newMapping.update({-1.0: -1.0, 0.0: 0.0, 1.0: 1.0})
             newSegments[axisTag] = newMapping
@@ -1063,7 +1064,7 @@ def normalize(value, triple, avarMapping):
     return floatToFixedToFloat(value, 14)
 
 
-def normalizeAxisLimits(varfont, axisLimits):
+def normalizeAxisLimits(varfont, axisLimits, usingAvar=True):
     fvar = varfont["fvar"]
     badLimits = set(axisLimits.keys()).difference(a.axisTag for a in fvar.axes)
     if badLimits:
@@ -1076,7 +1077,7 @@ def normalizeAxisLimits(varfont, axisLimits):
     }
 
     avarSegments = {}
-    if "avar" in varfont:
+    if usingAvar and "avar" in varfont:
         avarSegments = varfont["avar"].segments
     normalizedLimits = {}
     for axis_tag, triple in axes.items():
@@ -1175,7 +1176,7 @@ def instantiateVariableFont(
     instantiateFeatureVariations(varfont, normalizedLimits)
 
     if "avar" in varfont:
-        instantiateAvar(varfont, normalizedLimits)
+        instantiateAvar(varfont, axisLimits)
 
     with pruningUnusedNames(varfont):
         # if "STAT" in varfont:
@@ -1206,8 +1207,10 @@ def splitAxisLocationAndRanges(axisLimits, rangeType=AxisRange):
             axisRanges[axisTag] = value
         elif isinstance(value, (int, float)):
             location[axisTag] = value
+        elif isinstance(value, tuple):
+            axisRanges[axisTag] = rangeType(*value)
         else:
-            TypeError(
+            raise TypeError(
                 f"Expected number or {rangeType.__name__}, "
                 f"got {type(value).__name__}: {value!r}"
             )
