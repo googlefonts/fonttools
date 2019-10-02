@@ -865,14 +865,16 @@ def instantiateAvar(varfont, axisLimits):
     newSegments = {}
     for axisTag, mapping in segments.items():
         if axisTag in normalizedRanges:
+            # XXX https://github.com/fonttools/fonttools/issues/737
+            mapping = {
+                floatToFixedToFloat(k, 14): floatToFixedToFloat(v, 14)
+                for k, v in mapping.items()
+            }
             axisRange = normalizedRanges[axisTag]
             mappedMin = piecewiseLinearMap(axisRange.minimum, mapping)
             mappedMax = piecewiseLinearMap(axisRange.maximum, mapping)
             newMapping = {}
             for key, value in mapping.items():
-                # XXX https://github.com/fonttools/fonttools/issues/737
-                key = floatToFixedToFloat(key, 14)
-                value = floatToFixedToFloat(value, 14)
                 if key < 0:
                     if axisRange.minimum == 0 or key < axisRange.minimum:
                         continue
