@@ -1,4 +1,5 @@
 from fontTools.misc.py23 import *
+from fontTools.misc.fixedTools import floatToFixedToFloat
 from fontTools import ttLib
 from fontTools import designspaceLib
 from fontTools.feaLib.builder import addOpenTypeFeaturesFromString
@@ -1065,8 +1066,8 @@ class InstantiateAvarTest(object):
                     },
                     "wdth": {
                         -1.0: -1.0,
-                        -0.813042: -0.835332,
-                        -0.406460: -0.437523,
+                        -0.833374: -0.8537,
+                        -0.416626: -0.447144,
                         0: 0,
                         1.0: 1.0,
                     },
@@ -1087,13 +1088,7 @@ class InstantiateAvarTest(object):
                         0.8: 0.79,
                         1.0: 1.0,
                     },
-                    "wdth": {
-                        -1.0: -1.0,
-                        -0.952495: -0.958997,
-                        -0.476176: -0.502295,
-                        0: 0,
-                        1.0: 1.0,
-                    },
+                    "wdth": {-1.0: -1.0, -0.49994: -0.52381, 0: 0, 1.0: 1.0},
                 },
                 id="wdth=75:100",
             ),
@@ -1111,21 +1106,32 @@ class InstantiateAvarTest(object):
                         0.8: 0.79,
                         1.0: 1.0,
                     },
-                    "wdth": {
-                        -1.0: -1.0,
-                        -0.515412: -0.5392,
-                        0: 0,
-                        1.0: 1.0,
-                    },
+                    "wdth": {-1.0: -1.0, -0.54343: -0.56697, 0: 0, 1.0: 1.0},
                 },
                 id="wdth=77:100",
+            ),
+            pytest.param(
+                {"wdth": (87.5, 100)},
+                {
+                    "wght": {
+                        -1.0: -1.0,
+                        -0.6667: -0.7969,
+                        -0.3333: -0.5,
+                        0: 0,
+                        0.2: 0.18,
+                        0.4: 0.38,
+                        0.6: 0.61,
+                        0.8: 0.79,
+                        1.0: 1.0,
+                    },
+                    "wdth": {-1.0: -1.0, 0: 0, 1.0: 1.0},
+                },
+                id="wdth=87.5:100",
             ),
         ],
     )
     def test_limit_axes(self, varfont, axisLimits, expectedSegments):
-        normalizedLimits = instancer.normalizeAxisLimits(varfont, axisLimits)
-
-        instancer.instantiateAvar(varfont, normalizedLimits)
+        instancer.instantiateAvar(varfont, axisLimits)
 
         print(varfont["avar"].segments)
         for axisTag, segment in varfont["avar"].segments.items():
@@ -1135,8 +1141,12 @@ class InstantiateAvarTest(object):
             for (key, value), (expectedKey, expectedValue) in zip(
                 sorted(segment.items()), sorted(expectedSegment.items())
             ):
-                assert key == pytest.approx(expectedKey)
-                assert value == pytest.approx(expectedValue)
+                assert floatToFixedToFloat(key, 14) == floatToFixedToFloat(
+                    expectedKey, 14
+                )
+                assert floatToFixedToFloat(value, 14) == floatToFixedToFloat(
+                    expectedValue, 14
+                )
 
 
 class InstantiateFvarTest(object):
