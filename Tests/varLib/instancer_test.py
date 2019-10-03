@@ -932,23 +932,34 @@ class InstantiateAvarTest(object):
 
         assert "avar" not in varfont
 
+    @staticmethod
+    def quantizeF2Dot14Floats(mapping):
+        return {
+            floatToFixedToFloat(k, 14): floatToFixedToFloat(v, 14)
+            for k, v in mapping.items()
+        }
+
+    # the following values come from NotoSans-VF.ttf
+    DFLT_WGHT_MAPPING = {
+        -1.0: -1.0,
+        -0.6667: -0.7969,
+        -0.3333: -0.5,
+        0: 0,
+        0.2: 0.18,
+        0.4: 0.38,
+        0.6: 0.61,
+        0.8: 0.79,
+        1.0: 1.0,
+    }
+
+    DFLT_WDTH_MAPPING = {-1.0: -1.0, -0.6667: -0.7, -0.3333: -0.36664, 0: 0, 1.0: 1.0}
+
     @pytest.fixture
     def varfont(self):
-        # the following values from NotoSans-VF.ttf
         fvarAxes = ("wght", (100, 400, 900)), ("wdth", (62.5, 100, 100))
         avarSegments = {
-            "wght": {
-                -1.0: -1.0,
-                -0.6667: -0.7969,
-                -0.3333: -0.5,
-                0: 0,
-                0.2: 0.18,
-                0.4: 0.38,
-                0.6: 0.61,
-                0.8: 0.79,
-                1.0: 1.0,
-            },
-            "wdth": {-1.0: -1.0, -0.6667: -0.7, -0.3333: -0.36664, 0: 0, 1.0: 1.0},
+            "wght": self.quantizeF2Dot14Floats(self.DFLT_WGHT_MAPPING),
+            "wdth": self.quantizeF2Dot14Floats(self.DFLT_WDTH_MAPPING),
         }
         varfont = ttLib.TTFont()
         varfont["name"] = ttLib.newTable("name")
@@ -962,26 +973,7 @@ class InstantiateAvarTest(object):
         [
             pytest.param(
                 {"wght": (100, 900)},
-                {
-                    "wght": {
-                        -1.0: -1.0,
-                        -0.6667: -0.7969,
-                        -0.3333: -0.5,
-                        0: 0,
-                        0.2: 0.18,
-                        0.4: 0.38,
-                        0.6: 0.61,
-                        0.8: 0.79,
-                        1.0: 1.0,
-                    },
-                    "wdth": {
-                        -1.0: -1.0,
-                        -0.6667: -0.7,
-                        -0.3333: -0.36664,
-                        0: 0,
-                        1.0: 1.0,
-                    },
-                },
+                {"wght": DFLT_WGHT_MAPPING, "wdth": DFLT_WDTH_MAPPING},
                 id="wght=100:900",
             ),
             pytest.param(
@@ -996,13 +988,7 @@ class InstantiateAvarTest(object):
                         0.8: 0.79,
                         1.0: 1.0,
                     },
-                    "wdth": {
-                        -1.0: -1.0,
-                        -0.6667: -0.7,
-                        -0.3333: -0.36664,
-                        0: 0,
-                        1.0: 1.0,
-                    },
+                    "wdth": DFLT_WDTH_MAPPING,
                 },
                 id="wght=400:900",
             ),
@@ -1016,30 +1002,56 @@ class InstantiateAvarTest(object):
                         0: 0,
                         1.0: 1.0,
                     },
-                    "wdth": {
-                        -1.0: -1.0,
-                        -0.6667: -0.7,
-                        -0.3333: -0.36664,
-                        0: 0,
-                        1.0: 1.0,
-                    },
+                    "wdth": DFLT_WDTH_MAPPING,
                 },
                 id="wght=100:400",
             ),
             pytest.param(
-                {"wdth": (62.5, 100)},
+                {"wght": (400, 800)},
                 {
                     "wght": {
                         -1.0: -1.0,
-                        -0.6667: -0.7969,
-                        -0.3333: -0.5,
                         0: 0,
-                        0.2: 0.18,
-                        0.4: 0.38,
-                        0.6: 0.61,
-                        0.8: 0.79,
+                        0.25: 0.22784,
+                        0.50006: 0.48103,
+                        0.75: 0.77214,
                         1.0: 1.0,
                     },
+                    "wdth": DFLT_WDTH_MAPPING,
+                },
+                id="wght=400:800",
+            ),
+            pytest.param(
+                {"wght": (400, 700)},
+                {
+                    "wght": {
+                        -1.0: -1.0,
+                        0: 0,
+                        0.3334: 0.2951,
+                        0.66675: 0.623,
+                        1.0: 1.0,
+                    },
+                    "wdth": DFLT_WDTH_MAPPING,
+                },
+                id="wght=400:700",
+            ),
+            pytest.param(
+                {"wght": (400, 600)},
+                {
+                    "wght": {
+                        -1.0: -1.0,
+                        0: 0,
+                        0.5: 0.47363,
+                        1.0: 1.0,
+                    },
+                    "wdth": DFLT_WDTH_MAPPING,
+                },
+                id="wght=400:600",
+            ),
+            pytest.param(
+                {"wdth": (62.5, 100)},
+                {
+                    "wght": DFLT_WGHT_MAPPING,
                     "wdth": {
                         -1.0: -1.0,
                         -0.6667: -0.7,
@@ -1053,21 +1065,11 @@ class InstantiateAvarTest(object):
             pytest.param(
                 {"wdth": (70, 100)},
                 {
-                    "wght": {
-                        -1.0: -1.0,
-                        -0.6667: -0.7969,
-                        -0.3333: -0.5,
-                        0: 0,
-                        0.2: 0.18,
-                        0.4: 0.38,
-                        0.6: 0.61,
-                        0.8: 0.79,
-                        1.0: 1.0,
-                    },
+                    "wght": DFLT_WGHT_MAPPING,
                     "wdth": {
                         -1.0: -1.0,
-                        -0.833374: -0.8537,
-                        -0.416626: -0.447144,
+                        -0.8334: -0.85364,
+                        -0.4166: -0.44714,
                         0: 0,
                         1.0: 1.0,
                     },
@@ -1077,17 +1079,7 @@ class InstantiateAvarTest(object):
             pytest.param(
                 {"wdth": (75, 100)},
                 {
-                    "wght": {
-                        -1.0: -1.0,
-                        -0.6667: -0.7969,
-                        -0.3333: -0.5,
-                        0: 0,
-                        0.2: 0.18,
-                        0.4: 0.38,
-                        0.6: 0.61,
-                        0.8: 0.79,
-                        1.0: 1.0,
-                    },
+                    "wght": DFLT_WGHT_MAPPING,
                     "wdth": {-1.0: -1.0, -0.49994: -0.52374, 0: 0, 1.0: 1.0},
                 },
                 id="wdth=75:100",
@@ -1095,37 +1087,14 @@ class InstantiateAvarTest(object):
             pytest.param(
                 {"wdth": (77, 100)},
                 {
-                    "wght": {
-                        -1.0: -1.0,
-                        -0.6667: -0.7969,
-                        -0.3333: -0.5,
-                        0: 0,
-                        0.2: 0.18,
-                        0.4: 0.38,
-                        0.6: 0.61,
-                        0.8: 0.79,
-                        1.0: 1.0,
-                    },
-                    "wdth": {-1.0: -1.0, -0.54343: -0.56697, 0: 0, 1.0: 1.0},
+                    "wght": DFLT_WGHT_MAPPING,
+                    "wdth": {-1.0: -1.0, -0.54346: -0.56696, 0: 0, 1.0: 1.0},
                 },
                 id="wdth=77:100",
             ),
             pytest.param(
                 {"wdth": (87.5, 100)},
-                {
-                    "wght": {
-                        -1.0: -1.0,
-                        -0.6667: -0.7969,
-                        -0.3333: -0.5,
-                        0: 0,
-                        0.2: 0.18,
-                        0.4: 0.38,
-                        0.6: 0.61,
-                        0.8: 0.79,
-                        1.0: 1.0,
-                    },
-                    "wdth": {-1.0: -1.0, 0: 0, 1.0: 1.0},
-                },
+                {"wght": DFLT_WGHT_MAPPING, "wdth": {-1.0: -1.0, 0: 0, 1.0: 1.0}},
                 id="wdth=87.5:100",
             ),
         ],
@@ -1133,20 +1102,12 @@ class InstantiateAvarTest(object):
     def test_limit_axes(self, varfont, axisLimits, expectedSegments):
         instancer.instantiateAvar(varfont, axisLimits)
 
-        print(varfont["avar"].segments)
-        for axisTag, segment in varfont["avar"].segments.items():
-            assert axisTag in expectedSegments
-            expectedSegment = expectedSegments[axisTag]
-            assert len(segment) == len(expectedSegment)
-            for (key, value), (expectedKey, expectedValue) in zip(
-                sorted(segment.items()), sorted(expectedSegment.items())
-            ):
-                assert floatToFixedToFloat(key, 14) == floatToFixedToFloat(
-                    expectedKey, 14
-                )
-                assert floatToFixedToFloat(value, 14) == floatToFixedToFloat(
-                    expectedValue, 14
-                )
+        newSegments = varfont["avar"].segments
+        expectedSegments = {
+            axisTag: self.quantizeF2Dot14Floats(mapping)
+            for axisTag, mapping in expectedSegments.items()
+        }
+        assert newSegments == expectedSegments
 
 
 class InstantiateFvarTest(object):
