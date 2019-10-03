@@ -65,7 +65,12 @@ are supported, but support for CFF2 variable fonts will be added soon.
 The discussion and implementation of these features are tracked at
 https://github.com/fonttools/fonttools/issues/1537
 """
-from fontTools.misc.fixedTools import floatToFixedToFloat, otRound, MAX_F2DOT14
+from fontTools.misc.fixedTools import (
+    floatToFixed,
+    floatToFixedToFloat,
+    otRound,
+    MAX_F2DOT14,
+)
 from fontTools.varLib.models import supportScalar, normalizeValue, piecewiseLinearMap
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables.TupleVariation import TupleVariation
@@ -81,6 +86,7 @@ from fontTools.varLib.merger import MutatorMerger
 from contextlib import contextmanager
 import collections
 from copy import deepcopy
+import functools
 import logging
 from itertools import islice
 import os
@@ -844,6 +850,14 @@ def _instantiateFeatureVariations(table, fvarAxes, axisLimits):
         del table.FeatureVariations
 
 
+def _floatAsFixedAreEqual(v1, v2, precisionBits=14):
+    # return True if two floats are equal after converting them fixed-point numbers
+    return floatToFixed(v1, precisionBits) == floatToFixed(v2, precisionBits)
+
+
+f2dot14areEqual = functools.partial(_floatAsFixedAreEqual, precisionBits=14)
+
+
 def instantiateAvar(varfont, axisLimits):
     location, axisRanges = splitAxisLocationAndRanges(axisLimits)
 
@@ -871,26 +885,42 @@ def instantiateAvar(varfont, axisLimits):
                 for k, v in mapping.items()
             }
             axisRange = normalizedRanges[axisTag]
-            mappedMin = piecewiseLinearMap(axisRange.minimum, mapping)
-            mappedMax = piecewiseLinearMap(axisRange.maximum, mapping)
+            mappedMin = floatToFixedToFloat(
+                piecewiseLinearMap(axisRange.minimum, mapping), 14
+            )
+            mappedMax = floatToFixedToFloat(
+                piecewiseLinearMap(axisRange.maximum, mapping), 14
+            )
             newMapping = {}
             for key, value in mapping.items():
                 if key < 0:
-                    if axisRange.minimum == 0 or key < axisRange.minimum:
+                    if axisRange.minimum == 0:
                         continue
-                    key /= abs(axisRange.minimum)
+                    elif f2dot14areEqual(key, axisRange.minimum):
+                        key = -1.0
+                    elif key < axisRange.minimum:
+                        continue
+                    else:
+                        key /= abs(axisRange.minimum)
                 else:
-                    if axisRange.maximum == 0 or key > axisRange.maximum:
+                    if axisRange.maximum == 0:
                         continue
-                    key /= axisRange.maximum
+                    elif f2dot14areEqual(key, axisRange.maximum):
+                        key = 1.0
+                    elif key > axisRange.maximum:
+                        continue
+                    else:
+                        key /= axisRange.maximum
                 if value < 0:
-                    if mappedMin == 0 or value < mappedMin:
-                        continue
+                    assert mappedMin != 0
+                    assert f2dot14areEqual(value, mappedMin) or value > mappedMin
                     value /= abs(mappedMin)
                 else:
-                    if mappedMax == 0 or value > mappedMax:
-                        continue
+                    assert mappedMax != 0
+                    assert f2dot14areEqual(value, mappedMax) or value < mappedMax
                     value /= mappedMax
+                key = floatToFixedToFloat(key, 14)
+                value = floatToFixedToFloat(value, 14)
                 newMapping[key] = value
             newMapping.update({-1.0: -1.0, 0.0: 0.0, 1.0: 1.0})
             newSegments[axisTag] = newMapping
