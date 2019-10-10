@@ -86,7 +86,6 @@ from fontTools.varLib.merger import MutatorMerger
 from contextlib import contextmanager
 import collections
 from copy import deepcopy
-import functools
 import logging
 from itertools import islice
 import os
@@ -855,9 +854,6 @@ def _floatAsFixedAreEqual(v1, v2, precisionBits=14):
     return floatToFixed(v1, precisionBits) == floatToFixed(v2, precisionBits)
 
 
-f2dot14areEqual = functools.partial(_floatAsFixedAreEqual, precisionBits=14)
-
-
 def instantiateAvar(varfont, axisLimits):
     location, axisRanges = splitAxisLocationAndRanges(axisLimits)
 
@@ -891,8 +887,6 @@ def instantiateAvar(varfont, axisLimits):
                 if key < 0:
                     if axisRange.minimum == 0:
                         continue
-                    elif f2dot14areEqual(key, axisRange.minimum):
-                        key = -1.0
                     elif key < axisRange.minimum:
                         continue
                     else:
@@ -900,19 +894,17 @@ def instantiateAvar(varfont, axisLimits):
                 else:
                     if axisRange.maximum == 0:
                         continue
-                    elif f2dot14areEqual(key, axisRange.maximum):
-                        key = 1.0
                     elif key > axisRange.maximum:
                         continue
                     else:
                         key /= axisRange.maximum
                 if value < 0:
                     assert mappedMin != 0
-                    assert f2dot14areEqual(value, mappedMin) or value > mappedMin
+                    assert value >= mappedMin
                     value /= abs(mappedMin)
                 else:
                     assert mappedMax != 0
-                    assert f2dot14areEqual(value, mappedMax) or value < mappedMax
+                    assert value <= mappedMax
                     value /= mappedMax
                 key = floatToFixedToFloat(key, 14)
                 value = floatToFixedToFloat(value, 14)
