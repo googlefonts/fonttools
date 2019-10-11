@@ -849,9 +849,26 @@ def _instantiateFeatureVariations(table, fvarAxes, axisLimits):
         del table.FeatureVariations
 
 
-def _floatAsFixedAreEqual(v1, v2, precisionBits=14):
-    # return True if two floats are equal after converting them fixed-point numbers
-    return floatToFixed(v1, precisionBits) == floatToFixed(v2, precisionBits)
+def _isValidAvarSegmentMap(axisTag, segmentMap):
+    if not segmentMap:
+        return True
+    if not {(-1.0, -1.0), (0, 0), (1.0, 1.0)}.issubset(segmentMap.items()):
+        log.warning(
+            f"Invalid avar SegmentMap record for axis '{axisTag}': does not "
+            "include all required value maps {-1.0: -1.0, 0: 0, 1.0: 1.0}"
+        )
+        return False
+    previousValue = None
+    for fromCoord, toCoord in sorted(segmentMap.items()):
+        if previousValue is not None and previousValue > toCoord:
+            log.warning(
+                f"Invalid avar AxisValueMap({fromCoord}, {toCoord}) record "
+                f"for axis '{axisTag}': the toCoordinate value must be >= to "
+                f"the toCoordinate value of the preceding record ({previousValue})."
+            )
+            return False
+        previousValue = toCoord
+    return True
 
 
 def instantiateAvar(varfont, axisLimits):
@@ -874,7 +891,9 @@ def instantiateAvar(varfont, axisLimits):
     normalizedRanges = normalizeAxisLimits(varfont, axisRanges, usingAvar=False)
     newSegments = {}
     for axisTag, mapping in segments.items():
-        if axisTag in normalizedRanges:
+        if not _isValidAvarSegmentMap(axisTag, mapping):
+            continue
+        if mapping and axisTag in normalizedRanges:
             axisRange = normalizedRanges[axisTag]
             mappedMin = floatToFixedToFloat(
                 piecewiseLinearMap(axisRange.minimum, mapping), 14
@@ -885,16 +904,12 @@ def instantiateAvar(varfont, axisLimits):
             newMapping = {}
             for key, value in mapping.items():
                 if key < 0:
-                    if axisRange.minimum == 0:
-                        continue
-                    elif key < axisRange.minimum:
+                    if axisRange.minimum == 0 or key < axisRange.minimum:
                         continue
                     else:
                         key /= abs(axisRange.minimum)
-                else:
-                    if axisRange.maximum == 0:
-                        continue
-                    elif key > axisRange.maximum:
+                elif key > 0:
+                    if axisRange.maximum == 0 or key > axisRange.maximum:
                         continue
                     else:
                         key /= axisRange.maximum
@@ -902,14 +917,14 @@ def instantiateAvar(varfont, axisLimits):
                     assert mappedMin != 0
                     assert value >= mappedMin
                     value /= abs(mappedMin)
-                else:
+                elif value > 0:
                     assert mappedMax != 0
                     assert value <= mappedMax
                     value /= mappedMax
                 key = floatToFixedToFloat(key, 14)
                 value = floatToFixedToFloat(value, 14)
                 newMapping[key] = value
-            newMapping.update({-1.0: -1.0, 0.0: 0.0, 1.0: 1.0})
+            newMapping.update({-1.0: -1.0, 1.0: 1.0})
             newSegments[axisTag] = newMapping
         else:
             newSegments[axisTag] = mapping
