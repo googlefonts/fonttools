@@ -68,6 +68,7 @@ https://github.com/fonttools/fonttools/issues/1537
 from fontTools.misc.fixedTools import (
     floatToFixed,
     floatToFixedToFloat,
+    strToFixedToFloat,
     otRound,
     MAX_F2DOT14,
 )
@@ -1266,10 +1267,10 @@ def parseLimits(limits):
         if match.group(2):  # 'drop'
             lbound = None
         else:
-            lbound = float(match.group(3))
+            lbound = strToFixedToFloat(match.group(3), precisionBits=16)
         ubound = lbound
         if match.group(4):
-            ubound = float(match.group(4))
+            ubound = strToFixedToFloat(match.group(4), precisionBits=16)
         if lbound != ubound:
             result[tag] = AxisRange(lbound, ubound)
         else:
