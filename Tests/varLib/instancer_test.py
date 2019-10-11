@@ -1038,12 +1038,7 @@ class InstantiateAvarTest(object):
             pytest.param(
                 {"wght": (400, 600)},
                 {
-                    "wght": {
-                        -1.0: -1.0,
-                        0: 0,
-                        0.5: 0.47363,
-                        1.0: 1.0,
-                    },
+                    "wght": {-1.0: -1.0, 0: 0, 0.5: 0.47363, 1.0: 1.0},
                     "wdth": DFLT_WDTH_MAPPING,
                 },
                 id="wght=400:600",
@@ -1108,6 +1103,36 @@ class InstantiateAvarTest(object):
             for axisTag, mapping in expectedSegments.items()
         }
         assert newSegments == expectedSegments
+
+    @pytest.mark.parametrize(
+        "invalidSegmentMap",
+        [
+            pytest.param({0.5: 0.5}, id="missing-required-maps-1"),
+            pytest.param({-1.0: -1.0, 1.0: 1.0}, id="missing-required-maps-2"),
+            pytest.param(
+                {-1.0: -1.0, 0: 0, 0.5: 0.5, 0.6: 0.4, 1.0: 1.0},
+                id="retrograde-value-maps",
+            ),
+        ],
+    )
+    def test_drop_invalid_segment_map(self, varfont, invalidSegmentMap, caplog):
+        varfont["avar"].segments["wght"] = invalidSegmentMap
+
+        with caplog.at_level(logging.WARNING, logger="fontTools.varLib.instancer"):
+            instancer.instantiateAvar(varfont, {"wght": (100, 400)})
+
+        assert "Invalid avar" in caplog.text
+        assert "wght" not in varfont["avar"].segments
+
+    def test_isValidAvarSegmentMap(self):
+        assert instancer._isValidAvarSegmentMap("FOOO", {})
+        assert instancer._isValidAvarSegmentMap("FOOO", {-1.0: -1.0, 0: 0, 1.0: 1.0})
+        assert instancer._isValidAvarSegmentMap(
+            "FOOO", {-1.0: -1.0, 0: 0, 0.5: 0.5, 1.0: 1.0}
+        )
+        assert instancer._isValidAvarSegmentMap(
+            "FOOO", {-1.0: -1.0, 0: 0, 0.5: 0.5, 0.7: 0.5, 1.0: 1.0}
+        )
 
 
 class InstantiateFvarTest(object):
