@@ -978,7 +978,12 @@ def instantiateFvar(varfont, axisLimits):
     fvar.instances = instances
 
 
-def instantiateSTAT(varfont, location):
+def instantiateSTAT(varfont, axisLimits):
+    # 'axisLimits' dict must contain user-space (non-normalized) coordinates
+
+    # XXX do something with axisRanges
+    location, axisRanges = splitAxisLocationAndRanges(axisLimits, rangeType=AxisRange)
+
     pinnedAxes = set(location.keys())
 
     stat = varfont["STAT"].table
@@ -1213,8 +1218,8 @@ def instantiateVariableFont(
         instantiateAvar(varfont, axisLimits)
 
     with pruningUnusedNames(varfont):
-        # if "STAT" in varfont:
-        #     instantiateSTAT(varfont, axisLimits)
+        if "STAT" in varfont:
+            instantiateSTAT(varfont, axisLimits)
 
         instantiateFvar(varfont, axisLimits)
 
