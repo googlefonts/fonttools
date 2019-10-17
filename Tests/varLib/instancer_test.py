@@ -1189,7 +1189,7 @@ class InstantiateSTATTest(object):
     @pytest.mark.parametrize(
         "location, expected",
         [
-            ({"wght": 400}, ["Condensed", "Upright"]),
+            ({"wght": 400}, ["Regular", "Condensed", "Upright"]),
             ({"wdth": 100}, ["Thin", "Regular", "Black", "Upright"]),
         ],
     )
@@ -1199,7 +1199,7 @@ class InstantiateSTATTest(object):
         stat = varfont["STAT"].table
         designAxes = {a.AxisTag for a in stat.DesignAxisRecord.Axis}
 
-        assert designAxes == {"wght", "wdth", "ital"}.difference(location)
+        assert designAxes == {"wght", "wdth", "ital"}
 
         name = varfont["name"]
         valueNames = []
@@ -1209,7 +1209,23 @@ class InstantiateSTATTest(object):
 
         assert valueNames == expected
 
-    def test_skip_empty_table(self, varfont):
+    def test_skip_table_no_axis_value_array(self, varfont):
+        varfont["STAT"].table.AxisValueArray = None
+
+        instancer.instantiateSTAT(varfont, {"wght": 100})
+
+        assert len(varfont["STAT"].table.DesignAxisRecord.Axis) == 3
+        assert varfont["STAT"].table.AxisValueArray is None
+
+    def test_skip_table_axis_value_array_empty(self, varfont):
+        varfont["STAT"].table.AxisValueArray.AxisValue = []
+
+        instancer.instantiateSTAT(varfont, {"wght": 100})
+
+        assert len(varfont["STAT"].table.DesignAxisRecord.Axis) == 3
+        assert not varfont["STAT"].table.AxisValueArray.AxisValue
+
+    def test_skip_table_no_design_axes(self, varfont):
         stat = otTables.STAT()
         stat.Version = 0x00010001
         stat.populateDefaults()
@@ -1220,22 +1236,6 @@ class InstantiateSTATTest(object):
         instancer.instantiateSTAT(varfont, {"wght": 100})
 
         assert not varfont["STAT"].table.DesignAxisRecord
-
-    def test_drop_table(self, varfont):
-        stat = otTables.STAT()
-        stat.Version = 0x00010001
-        stat.populateDefaults()
-        stat.DesignAxisRecord = otTables.AxisRecordArray()
-        axis = otTables.AxisRecord()
-        axis.AxisTag = "wght"
-        axis.AxisNameID = 0
-        axis.AxisOrdering = 0
-        stat.DesignAxisRecord.Axis = [axis]
-        varfont["STAT"].table = stat
-
-        instancer.instantiateSTAT(varfont, {"wght": 100})
-
-        assert "STAT" not in varfont
 
 
 def test_pruningUnusedNames(varfont):
