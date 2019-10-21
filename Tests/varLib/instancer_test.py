@@ -1237,6 +1237,89 @@ class InstantiateSTATTest(object):
 
         assert not varfont["STAT"].table.DesignAxisRecord
 
+    @staticmethod
+    def get_STAT_axis_values(stat):
+        axes = stat.DesignAxisRecord.Axis
+        result = []
+        for axisValue in stat.AxisValueArray.AxisValue:
+            if axisValue.Format == 1:
+                result.append((axes[axisValue.AxisIndex].AxisTag, axisValue.Value))
+            elif axisValue.Format == 3:
+                result.append(
+                    (
+                        axes[axisValue.AxisIndex].AxisTag,
+                        (axisValue.Value, axisValue.LinkedValue),
+                    )
+                )
+            elif axisValue.Format == 2:
+                result.append(
+                    (
+                        axes[axisValue.AxisIndex].AxisTag,
+                        (
+                            axisValue.RangeMinValue,
+                            axisValue.NominalValue,
+                            axisValue.RangeMaxValue,
+                        ),
+                    )
+                )
+            elif axisValue.Format == 4:
+                result.append(
+                    tuple(
+                        (axes[rec.AxisIndex].AxisTag, rec.Value)
+                        for rec in axisValue.AxisValueRecord
+                    )
+                )
+            else:
+                raise AssertionError(axisValue.Format)
+        return result
+
+    def test_limit_axes(self, varfont2):
+        instancer.instantiateSTAT(varfont2, {"wght": (400, 500), "wdth": (75, 100)})
+
+        assert len(varfont2["STAT"].table.AxisValueArray.AxisValue) == 5
+        assert self.get_STAT_axis_values(varfont2["STAT"].table) == [
+            ("wght", (400.0, 700.0)),
+            ("wght", 500.0),
+            ("wdth", (93.75, 100.0, 100.0)),
+            ("wdth", (81.25, 87.5, 93.75)),
+            ("wdth", (68.75, 75.0, 81.25)),
+        ]
+
+    def test_limit_axis_value_format_4(self, varfont2):
+        stat = varfont2["STAT"].table
+
+        axisValue = otTables.AxisValue()
+        axisValue.Format = 4
+        axisValue.AxisValueRecord = []
+        for tag, value in (("wght", 575), ("wdth", 90)):
+            rec = otTables.AxisValueRecord()
+            rec.AxisIndex = next(
+                i for i, a in enumerate(stat.DesignAxisRecord.Axis) if a.AxisTag == tag
+            )
+            rec.Value = value
+            axisValue.AxisValueRecord.append(rec)
+        stat.AxisValueArray.AxisValue.append(axisValue)
+
+        instancer.instantiateSTAT(varfont2, {"wght": (100, 600)})
+
+        assert axisValue in varfont2["STAT"].table.AxisValueArray.AxisValue
+
+        instancer.instantiateSTAT(varfont2, {"wdth": (62.5, 87.5)})
+
+        assert axisValue not in varfont2["STAT"].table.AxisValueArray.AxisValue
+
+    def test_unknown_axis_value_format(self, varfont2, caplog):
+        stat = varfont2["STAT"].table
+        axisValue = otTables.AxisValue()
+        axisValue.Format = 5
+        stat.AxisValueArray.AxisValue.append(axisValue)
+
+        with caplog.at_level(logging.WARNING, logger="fontTools.varLib.instancer"):
+            instancer.instantiateSTAT(varfont2, {"wght": 400})
+
+        assert "Unknown AxisValue table format (5)" in caplog.text
+        assert axisValue in varfont2["STAT"].table.AxisValueArray.AxisValue
+
 
 def test_pruningUnusedNames(varfont):
     varNameIDs = instancer.getVariationNameIDs(varfont)
