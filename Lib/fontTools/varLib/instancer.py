@@ -1029,7 +1029,7 @@ def instantiateSTAT(varfont, axisLimits):
             if dropAxisValueTable:
                 continue
         else:
-            raise NotImplementedError(axisValueFormat)
+            log.warn("Unknown AxisValue table format (%s); ignored", axisValueFormat)
         newAxisValueTables.append(axisValueTable)
 
     stat.AxisValueArray.AxisValue = newAxisValueTables
