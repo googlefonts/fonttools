@@ -513,7 +513,6 @@ class TupleVarStoreAdapterTest(object):
         adapter.rebuildRegions()
 
         assert adapter.regions == regions
-        assert adapter.axisOrder == axisOrder
 
         del tupleVarData[0][2]
         tupleVarData[1][0].axes = {"wght": (-1.0, -0.5, 0)}
@@ -527,7 +526,6 @@ class TupleVarStoreAdapterTest(object):
             {"wght": (-1.0, -0.5, 0)},
             {"wght": (0, 0.5, 1.0)},
         ]
-        assert adapter.axisOrder == ["wght"]
 
     def test_roundtrip(self, fvarAxes):
         regions = [
