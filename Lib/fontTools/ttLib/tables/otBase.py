@@ -46,24 +46,24 @@ class BaseTTXConverter(DefaultTable):
 
 		# General outline:
 		# Create a top-level OTTableWriter for the GPOS/GSUB table.
-		# 	Call the compile method for the the table
-		# 		for each 'converter' record in the table converter list
-		# 			call converter's write method for each item in the value.
-		# 				- For simple items, the write method adds a string to the
-		# 				writer's self.items list.
-		# 				- For Struct/Table/Subtable items, it add first adds new writer to the
-		# 				to the writer's self.items, then calls the item's compile method.
-		# 				This creates a tree of writers, rooted at the GUSB/GPOS writer, with
-		# 				each writer representing a table, and the writer.items list containing
-		# 				the child data strings and writers.
-		# 	call the getAllData method
-		# 		call _doneWriting, which removes duplicates
-		# 		call _gatherTables. This traverses the tables, adding unique occurences to a flat list of tables
-		# 		Traverse the flat list of tables, calling getDataLength on each to update their position
-		# 		Traverse the flat list of tables again, calling getData each get the data in the table, now that
-		# 		pos's and offset are known.
+		#	Call the compile method for the the table
+		#		for each 'converter' record in the table converter list
+		#			call converter's write method for each item in the value.
+		#				- For simple items, the write method adds a string to the
+		#				writer's self.items list.
+		#				- For Struct/Table/Subtable items, it add first adds new writer to the
+		#				to the writer's self.items, then calls the item's compile method.
+		#				This creates a tree of writers, rooted at the GUSB/GPOS writer, with
+		#				each writer representing a table, and the writer.items list containing
+		#				the child data strings and writers.
+		#	call the getAllData method
+		#		call _doneWriting, which removes duplicates
+		#		call _gatherTables. This traverses the tables, adding unique occurences to a flat list of tables
+		#		Traverse the flat list of tables, calling getDataLength on each to update their position
+		#		Traverse the flat list of tables again, calling getData each get the data in the table, now that
+		#		pos's and offset are known.
 
-		# 		If a lookup subtable overflows an offset, we have to start all over.
+		#		If a lookup subtable overflows an offset, we have to start all over.
 		overflowRecord = None
 
 		while True:
@@ -221,6 +221,25 @@ class OTTableReader(object):
 		return self.localState and name in self.localState
 
 
+class Node:
+  def __init__(self, item):
+	  self.hash_value = self.checksum(item.getData())
+	  self.size = item.getDataLength()
+	  self.incoming = 0
+
+  def checksum(self, data):
+	  h = 7
+	  for b in data:
+		  h = (((31 * h) % 4294967296)  + b) % 4294967296
+	  return h
+
+
+  def print(self):
+	  print(f"{self.hash_value:10}, {self.size:4} bytes, {self.incoming:2} incoming edges")
+
+  def increment_incoming(self):
+	  self.incoming += 1
+
 class OTTableWriter(object):
 
 	"""Helper class to gather and assemble data for OpenType tables."""
@@ -271,24 +290,26 @@ class OTTableWriter(object):
 	def getData(self):
 		"""Assemble the data for this writer/table, without subtables."""
 		items = list(self.items)  # make a shallow copy
-		pos = self.pos
+		pos = 0 if self.pos is None else self.pos
 		numItems = len(items)
 		for i in range(numItems):
 			item = items[i]
 
+
 			if hasattr(item, "getData"):
+				item_pos = 0 if item.pos is None else item.pos
 				if item.offsetSize == 4:
-					items[i] = packULong(item.pos - pos)
+					items[i] = packULong(item_pos - pos)
 				elif item.offsetSize == 2:
 					try:
-						items[i] = packUShort(item.pos - pos)
+						items[i] = packUShort(item_pos - pos)
 					except struct.error:
 						# provide data to fix overflow problem.
 						overflowErrorRecord = self.getOverflowErrorRecord(item)
 
 						raise OTLOffsetOverflowError(overflowErrorRecord)
 				elif item.offsetSize == 3:
-					items[i] = packUInt24(item.pos - pos)
+					items[i] = packUInt24(item_pos - pos)
 				else:
 					raise ValueError(item.offsetSize)
 
@@ -319,7 +340,7 @@ class OTTableWriter(object):
 
 		# Certain versions of Uniscribe reject the font if the GSUB/GPOS top-level
 		# arrays (ScriptList, FeatureList, LookupList) point to the same, possibly
-		# empty, array.  So, we don't share those.
+		# empty, array.	 So, we don't share those.
 		# See: https://github.com/fonttools/fonttools/issues/518
 		dontShare = hasattr(self, 'DontShare')
 
@@ -337,6 +358,24 @@ class OTTableWriter(object):
 					items[i] = item = internedTables.setdefault(item, item)
 		self.items = tuple(items)
 
+	def _getGraphData(self, graphData=None):
+		if graphData is None:
+			graphData = dict()
+
+		graphData.setdefault(id(self), Node(self))
+
+		for i in range(len(self.items)):
+			item = self.items[i]
+			if hasattr(item, "getData"):
+				node = graphData.setdefault(id(item), Node(item))
+				node.increment_incoming()
+				item._getGraphData(graphData)
+		return graphData
+
+	def _printGraphData(self, graphData):
+		for node in graphData.values():
+			node.print()
+
 	def _gatherTables(self, tables, extTables, done):
 		# Convert table references in self.items tree to a flat
 		# list of tables in depth-first traversal order.
@@ -344,7 +383,7 @@ class OTTableWriter(object):
 		# We do the traversal in reverse order at each level, in order to
 		# resolve duplicate references to be the last reference in the list of tables.
 		# For extension lookups, duplicate references can be merged only within the
-		# writer tree under the  extension lookup.
+		# writer tree under the	 extension lookup.
 
 		done[id(self)] = True
 
@@ -396,6 +435,7 @@ class OTTableWriter(object):
 		"""Assemble all data, including all subtables."""
 		internedTables = {}
 		self._doneWriting(internedTables)
+		self._printGraphData(self._getGraphData())
 		tables = []
 		extTables = []
 		done = {}
@@ -646,7 +686,7 @@ class BaseTable(object):
 	def decompile(self, reader, font):
 		self.readFormat(reader)
 		table = {}
-		self.__rawTable = table  # for debugging
+		self.__rawTable = table	 # for debugging
 		for conv in self.getConverters():
 			if conv.name == "SubTable":
 				conv = conv.getConverter(reader.tableTag,
@@ -658,7 +698,7 @@ class BaseTable(object):
 				conv = conv.getConverter(reader["FeatureTag"])
 			if conv.name == "SubStruct":
 				conv = conv.getConverter(reader.tableTag,
-				                         table["MorphType"])
+							 table["MorphType"])
 			try:
 				if conv.repeat:
 					if isinstance(conv.repeat, int):
@@ -687,6 +727,7 @@ class BaseTable(object):
 			self.__dict__.update(table)
 
 		del self.__rawTable  # succeeded, get rid of debugging info
+
 
 	def compile(self, writer, font):
 		self.ensureDecompiled()
@@ -821,7 +862,7 @@ class BaseTable(object):
 		try:
 			conv = self.getConverterByName(name)
 		except KeyError:
-			raise    # XXX on KeyError, raise nice error
+			raise	 # XXX on KeyError, raise nice error
 		value = conv.xmlRead(attrs, content, font)
 		if conv.repeat:
 			seq = getattr(self, conv.name, None)
