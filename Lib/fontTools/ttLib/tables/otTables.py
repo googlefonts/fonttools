@@ -1590,6 +1590,38 @@ _equivalents = {
 # XXX This should probably move to otBase.py
 #
 
+def preSplitTables(ttf, subtable, done):
+	"""Scan the given GPOS/GSUB table for any subtables that are extremely large and may
+	need splitting to reduce the number of potential overflows."""
+	done.add(id(subtable))
+	# TODO handle extension subtables
+	if hasattr(subtable, 'name') and subtable.name == 'SubTable':
+		to_split = [subtable]
+		while len(to_split):
+			next_item = to_split.pop()
+			total_size = next_item.getTotalDataSize(set())
+			if total_size <= 65536:
+				continue
+
+			overflow = next_item.parent.getOverflowErrorRecord(next_item)
+			print(f"Lookup {next_item.parent.repeatIndex} SubTable {next_item.repeatIndex} "
+						f"is {total_size} bytes. Splitting")
+			if fixSubTableOverFlows(ttf, overflow, dontDuplicate=True):
+				# Re-check the newly created splits
+				to_split.append(next_item)
+				to_split.append(next_item.parent.SubTable[overflow.subIndex + 1])
+
+		return
+
+	for i, item in enumerate(subtable.items):
+		if not hasattr(item, "getData") or id(item) in done:
+			continue
+
+		preSplitTables(ttf, item, done)
+
+
+
+
 def fixLookupOverFlows(ttf, overflowRecord):
 	""" Either the offset from the LookupList to a lookup overflowed, or
 	an offset from a lookup to a subtable overflowed.
@@ -1614,6 +1646,7 @@ def fixLookupOverFlows(ttf, overflowRecord):
 	If the offset from a lookup to subtable overflowed, then we must promote it
 		to an Extension Lookup type.
 	"""
+	print("##### fixLookupOverFlows ####")
 	ok = 0
 	lookupIndex = overflowRecord.LookupListIndex
 	if (overflowRecord.SubTableIndex is None):
@@ -1880,17 +1913,19 @@ splitTable = {	'GSUB': {
 
 			}
 
-def fixSubTableOverFlows(ttf, overflowRecord):
+def fixSubTableOverFlows(ttf, overflowRecord, dontDuplicate=False):
 	"""
 	An offset has overflowed within a sub-table. We need to divide this subtable into smaller parts.
 	"""
+	print("##### fixSubTableOverFlows ####")
 	table = ttf[overflowRecord.tableType].table
 	lookup = table.LookupList.Lookup[overflowRecord.LookupListIndex]
 	subIndex = overflowRecord.SubTableIndex
 	subtable = lookup.SubTable[subIndex]
 
 	# First, try not sharing anything for this subtable...
-	if not hasattr(subtable, "DontShare"):
+	if not dontDuplicate and not hasattr(subtable, "DontShare"):
+		print("	 Duplicating.")
 		subtable.DontShare = True
 		return True
 
@@ -1928,6 +1963,7 @@ def fixSubTableOverFlows(ttf, overflowRecord):
 		)
 		return False
 
+	print("	 Splitting.")
 	ok = splitFunc(subtable, newSubTable, overflowRecord)
 	if ok:
 		lookup.SubTable.insert(subIndex + 1, toInsert)

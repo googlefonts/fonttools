@@ -108,7 +108,7 @@ class BaseTTXConverter(DefaultTable):
 				):
 					try:
 						log.debug("serializing '%s' with hb.repack", self.tableTag)
-						return writer.getAllDataUsingHarfbuzz()
+						return writer.getAllDataUsingHarfbuzz(font)
 					except (ValueError, MemoryError, hb.RepackerError) as e:
 						# Only log hb repacker errors the first time they occur in
 						# the offset-overflow resolution loop, they are just noisy.
@@ -471,6 +471,19 @@ class OTTableWriter(object):
 
 		selfTables.append(self)
 
+	def getTotalDataSize(self, done):
+		"""Returns the total number of bytes this item and all of it's children consume."""
+		total_size = self.getDataLength()
+		for i, item in enumerate(self.items):
+			if not hasattr(item, "getData") or id(item) in done:
+				continue
+			total_size += item.getTotalDataSize(done)
+
+		done.add(id(self))
+
+		return total_size
+
+
 	def _gatherGraphForHarfbuzz(self, tables, obj_list, done, objidx, virtual_edges):
 		real_links = []
 		virtual_links = []
@@ -510,7 +523,7 @@ class OTTableWriter(object):
 				child_idx = item_idx = item._gatherGraphForHarfbuzz(tables, obj_list, done, item_idx, virtual_edges)
 			else:
 				child_idx = done[id(item)]
-                        
+
 			real_edge = (pos, item.offsetSize, child_idx)
 			real_links.append(real_edge)
 			offset_pos += item.offsetSize
@@ -524,7 +537,7 @@ class OTTableWriter(object):
 
 		return item_idx
 
-	def getAllDataUsingHarfbuzz(self):
+	def getAllDataUsingHarfbuzz(self, ttf):
 		"""The Whole table is represented as a Graph.
                 Assemble graph data and call Harfbuzz repacker to pack the table.
                 Harfbuzz repacker is faster and retain as much sub-table sharing as possible, see also:
@@ -539,7 +552,11 @@ class OTTableWriter(object):
 		done = {}
 		objidx = 0
 		virtual_edges = []
+
+		from .otTables import preSplitTables
+		preSplitTables(ttf, self, set())
 		self._gatherGraphForHarfbuzz(tables, obj_list, done, objidx, virtual_edges)
+
 		# Gather all data in two passes: the absolute positions of all
 		# subtable are needed before the actual data can be assembled.
 		pos = 0
